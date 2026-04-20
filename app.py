@@ -313,7 +313,7 @@ if not FACE_LIB_READY:
     st.error("Face recognition dependency is not ready.")
     st.code(
         "pip install -r requirements.txt\n"
-        "pip install git+https://github.com/ageitgey/face_recognition_models"
+        "pip install setuptools"
     )
     st.caption(f"Technical detail: {FACE_LIB_ERROR}")
     st.stop()
