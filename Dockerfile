@@ -6,11 +6,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System dependencies required for OpenCV and dlib/face_recognition.
+# System dependencies required for OpenCV and face recognition runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    g++ \
     git \
     libgl1 \
     libglib2.0-0 \
