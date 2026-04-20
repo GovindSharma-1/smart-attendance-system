@@ -8,17 +8,6 @@ import pandas as pd
 import streamlit as st
 from PIL import Image, ImageDraw
 
-# We import face_recognition safely so the app can show a user-friendly
-# message instead of crashing if dependency resolution fails.
-try:
-    import face_recognition
-    FACE_LIB_READY = True
-    FACE_LIB_ERROR = ""
-except Exception as e:
-    face_recognition = None
-    FACE_LIB_READY = False
-    FACE_LIB_ERROR = str(e)
-
 
 # ----------------------------- #
 # Project-level file/folder paths
@@ -27,6 +16,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STUDENT_IMAGES_DIR = os.path.join(BASE_DIR, "student_images")
 ENCODINGS_PATH = os.path.join(BASE_DIR, "encodings.pkl")
 ATTENDANCE_PATH = os.path.join(BASE_DIR, "Attendance.csv")
+
+
+# ----------------------------- #
+# Helper: Lazy-load face_recognition for faster startup
+# ----------------------------- #
+@st.cache_resource
+def get_face_lib():
+    """
+    Imports face_recognition only when needed.
+    This keeps initial Streamlit page load fast on low-resource hosts.
+    """
+    try:
+        import face_recognition as fr
+
+        return fr, ""
+    except Exception as e:
+        return None, str(e)
 
 
 # ----------------------------- #
@@ -97,10 +103,11 @@ def extract_single_face_encoding(rgb_array: np.ndarray):
     Returns the first face encoding if found.
     Returns None if no face is detected.
     """
-    if not FACE_LIB_READY:
+    face_lib, _ = get_face_lib()
+    if face_lib is None:
         return None
 
-    encodings = face_recognition.face_encodings(rgb_array)
+    encodings = face_lib.face_encodings(rgb_array)
     if len(encodings) == 0:
         return None
     return encodings[0]
@@ -255,12 +262,13 @@ def recognize_and_annotate(pil_image: Image.Image):
       - annotated PIL image
       - list of recognized names
     """
-    if not FACE_LIB_READY:
+    face_lib, _ = get_face_lib()
+    if face_lib is None:
         return pil_image, []
 
     rgb_array = np.array(pil_image.convert("RGB"))
-    face_locations = face_recognition.face_locations(rgb_array)
-    face_encodings = face_recognition.face_encodings(rgb_array, face_locations)
+    face_locations = face_lib.face_locations(rgb_array)
+    face_encodings = face_lib.face_encodings(rgb_array, face_locations)
 
     known_names = st.session_state.known_data["names"]
     known_encodings = st.session_state.known_data["encodings"]
@@ -273,8 +281,8 @@ def recognize_and_annotate(pil_image: Image.Image):
         predicted_name = "Unknown"
 
         if len(known_encodings) > 0:
-            matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
-            distances = face_recognition.face_distance(known_encodings, face_encoding)
+            matches = face_lib.compare_faces(known_encodings, face_encoding, tolerance=0.5)
+            distances = face_lib.face_distance(known_encodings, face_encoding)
             best_idx = int(np.argmin(distances)) if len(distances) > 0 else -1
 
             if best_idx >= 0 and matches[best_idx]:
@@ -308,16 +316,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Stop early with clear setup guidance when face library is unavailable.
-if not FACE_LIB_READY:
-    st.error("Face recognition dependency is not ready.")
-    st.code(
-        "pip install -r requirements.txt\n"
-        "pip install setuptools"
-    )
-    st.caption(f"Technical detail: {FACE_LIB_ERROR}")
-    st.stop()
-
 st.markdown('<div class="main-title">🚀 Smart Attendance System</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="subtitle">AI-powered face recognition attendance for your portfolio project</div>',
@@ -344,10 +342,20 @@ uploaded_students = st.sidebar.file_uploader(
     accept_multiple_files=True,
 )
 if st.sidebar.button("Register Uploaded Students"):
-    register_students_from_uploads(uploaded_students)
+    face_lib, face_lib_error = get_face_lib()
+    if face_lib is None:
+        st.sidebar.error("Face recognition dependency is not ready on this server.")
+        st.sidebar.caption(face_lib_error)
+    else:
+        register_students_from_uploads(uploaded_students)
 
 if st.sidebar.button("Train From student_images Folder"):
-    register_students_from_folder()
+    face_lib, face_lib_error = get_face_lib()
+    if face_lib is None:
+        st.sidebar.error("Face recognition dependency is not ready on this server.")
+        st.sidebar.caption(face_lib_error)
+    else:
+        register_students_from_folder()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("View Attendance")
@@ -383,7 +391,11 @@ uploaded_test_image = st.file_uploader(
 process_clicked = st.button("Capture / Process Attendance", type="primary")
 
 if process_clicked:
-    if len(st.session_state.known_data["encodings"]) == 0:
+    face_lib, face_lib_error = get_face_lib()
+    if face_lib is None:
+        st.error("Face recognition dependency is not ready on this server.")
+        st.caption(face_lib_error)
+    elif len(st.session_state.known_data["encodings"]) == 0:
         st.error("No student encodings found. Register students first from the sidebar.")
     else:
         selected_bytes = None
