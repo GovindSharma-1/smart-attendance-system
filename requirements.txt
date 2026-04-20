@@ -1,6 +1,6 @@
 streamlit
+face_recognition
+opencv-python
 numpy
 pandas
-opencv-python-headless
-face_recognition @ git+https://github.com/thetoby9944/face_recognition
-face_recognition_models @ git+https://github.com/ageitgey/face_recognition_models
+pillow
